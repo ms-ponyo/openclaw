@@ -4,12 +4,7 @@
   "private": true,
   "description": "OpenClaw Google Workspace plugin (Gmail + Calendar)",
   "type": "module",
-  "dependencies": {
-    "@googleapis/gmail": "^16.0.0",
-    "@googleapis/calendar": "^14.0.0",
-    "google-auth-library": "^10.0.0",
-    "@sinclair/typebox": "0.34.48"
-  },
+  "dependencies": {},
   "devDependencies": {
     "openclaw": "workspace:*"
   },
