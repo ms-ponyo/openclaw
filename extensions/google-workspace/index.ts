@@ -13,6 +13,7 @@ import {
   gmailAttachmentGetTool,
 } from "./src/gmail/tools.js";
 import {
+  calendarListCalendarsTool,
   calendarListEventsTool,
   calendarGetEventTool,
   calendarCreateEventTool,
@@ -33,6 +34,7 @@ const GMAIL_TOOL_NAMES = [
 ];
 
 const CALENDAR_TOOL_NAMES = [
+  "calendar_list",
   "calendar_list_events",
   "calendar_get_event",
   "calendar_create_event",
@@ -87,6 +89,7 @@ const plugin = {
         const calendarClient = calendar({ version: "v3", auth });
 
         return [
+          calendarListCalendarsTool(calendarClient),
           calendarListEventsTool(calendarClient),
           calendarGetEventTool(calendarClient),
           calendarCreateEventTool(calendarClient),

@@ -48,6 +48,32 @@ export function formatEvent(
 // Tool factories
 // ---------------------------------------------------------------------------
 
+export function calendarListCalendarsTool(calendar: calendar_v3.Calendar) {
+  return {
+    name: "calendar_list",
+    label: "List Calendars",
+    description:
+      "List all calendars the user has access to, including their IDs. Use this to discover calendar IDs for other tools.",
+    parameters: Type.Object({}),
+    async execute(_id: string, _params: Record<string, unknown>) {
+      try {
+        const res = await withRetry(() => calendar.calendarList.list());
+        const calendars = (res.data.items ?? []).map((c) => ({
+          id: c.id ?? "",
+          summary: c.summary ?? "(no title)",
+          primary: c.primary ?? false,
+          accessRole: c.accessRole ?? "",
+          ...(c.description ? { description: c.description } : {}),
+          ...(c.backgroundColor ? { color: c.backgroundColor } : {}),
+        }));
+        return json({ calendars, count: calendars.length });
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
+  };
+}
+
 export function calendarListEventsTool(calendar: calendar_v3.Calendar) {
   return {
     name: "calendar_list_events",
