@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { GoogleAuth } from "google-auth-library";
+import { GoogleAuth, OAuth2Client } from "google-auth-library";
 
 /** Mapping from skill name to the Google OAuth scopes it requires. */
 const SKILL_SCOPES: Record<string, string[]> = {
@@ -33,29 +33,18 @@ export function resolveScopes(skills: string[]): string[] {
   return [...seen];
 }
 
-export interface AuthClientOptions {
-  /** Path to a service-account JSON key file, or the JSON key as a string. */
+// ── Service Account auth (Google Workspace orgs) ────────────────────
+
+export interface ServiceAccountAuthOptions {
   serviceAccountKey: string;
-  /** The Google Workspace user email to impersonate via domain-wide delegation. */
   delegateEmail: string;
-  /** OAuth scopes the client should request. */
   scopes: string[];
 }
 
-/**
- * Create a `GoogleAuth` client configured for domain-wide delegation using a
- * service-account key.
- *
- * `serviceAccountKey` may be either:
- *   - A file-system path to the JSON key file, or
- *   - The JSON key content as a string.
- */
-export function createAuthClient(options: AuthClientOptions): GoogleAuth {
+export function createServiceAccountAuth(options: ServiceAccountAuthOptions): GoogleAuth {
   const { serviceAccountKey, delegateEmail, scopes } = options;
 
   let credentials: Record<string, unknown>;
-
-  // Determine whether the value is inline JSON or a file path.
   const trimmed = serviceAccountKey.trim();
   if (trimmed.startsWith("{")) {
     credentials = JSON.parse(trimmed) as Record<string, unknown>;
@@ -67,8 +56,70 @@ export function createAuthClient(options: AuthClientOptions): GoogleAuth {
   return new GoogleAuth({
     credentials,
     scopes,
-    clientOptions: {
-      subject: delegateEmail,
-    },
+    clientOptions: { subject: delegateEmail },
   });
+}
+
+// ── OAuth2 refresh token auth (personal Gmail) ─────────────────────
+
+export interface OAuth2AuthOptions {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}
+
+export function createOAuth2Auth(options: OAuth2AuthOptions): OAuth2Client {
+  const client = new OAuth2Client(options.clientId, options.clientSecret);
+  client.setCredentials({ refresh_token: options.refreshToken });
+  return client;
+}
+
+// ── Unified factory ─────────────────────────────────────────────────
+
+export type AuthConfig =
+  | { mode: "service-account"; serviceAccountKey: string; delegateEmail: string }
+  | { mode: "oauth2"; clientId: string; clientSecret: string; refreshToken: string };
+
+/**
+ * Create a Google auth client from plugin config.
+ * Supports both service account (Workspace) and OAuth2 refresh token (personal Gmail).
+ */
+export function createAuthClient(config: AuthConfig, scopes: string[]): GoogleAuth | OAuth2Client {
+  if (config.mode === "service-account") {
+    return createServiceAccountAuth({
+      serviceAccountKey: config.serviceAccountKey,
+      delegateEmail: config.delegateEmail,
+      scopes,
+    });
+  }
+  // OAuth2 — scopes are baked into the refresh token at consent time
+  return createOAuth2Auth({
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    refreshToken: config.refreshToken,
+  });
+}
+
+/**
+ * Detect auth mode from plugin config fields.
+ */
+export function resolveAuthConfig(pluginConfig: Record<string, unknown>): AuthConfig | null {
+  // OAuth2 mode (personal Gmail)
+  if (pluginConfig.clientId && pluginConfig.clientSecret && pluginConfig.refreshToken) {
+    return {
+      mode: "oauth2",
+      clientId: String(pluginConfig.clientId),
+      clientSecret: String(pluginConfig.clientSecret),
+      refreshToken: String(pluginConfig.refreshToken),
+    };
+  }
+  // Service account mode (Google Workspace)
+  if (pluginConfig.serviceAccountKey && pluginConfig.delegateEmail) {
+    return {
+      mode: "service-account",
+      serviceAccountKey: String(pluginConfig.serviceAccountKey),
+      delegateEmail: String(pluginConfig.delegateEmail),
+    };
+  }
+  return null;
 }

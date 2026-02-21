@@ -1,7 +1,7 @@
 import { gmail } from "@googleapis/gmail";
 import { calendar } from "@googleapis/calendar";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { createAuthClient, resolveScopes } from "./src/auth.js";
+import { createAuthClient, resolveAuthConfig, resolveScopes } from "./src/auth.js";
 import {
   gmailSearchTool,
   gmailReadTool,
@@ -44,23 +44,25 @@ const CALENDAR_TOOL_NAMES = [
 const plugin = {
   id: "google-workspace",
   name: "Google Workspace",
-  description: "Gmail and Google Calendar tools via service account",
+  description: "Gmail and Google Calendar tools via OAuth2 or service account",
   register(api: OpenClawPluginApi) {
-    const serviceAccountKey = api.pluginConfig?.serviceAccountKey as string | undefined;
-    const delegateEmail = api.pluginConfig?.delegateEmail as string | undefined;
+    const pluginConfig = (api.pluginConfig ?? {}) as Record<string, unknown>;
+    const authConfig = resolveAuthConfig(pluginConfig);
 
-    if (!serviceAccountKey || !delegateEmail) {
+    if (!authConfig) {
       api.logger.warn(
-        "[google-workspace] Missing serviceAccountKey or delegateEmail in plugin config — skipping tool registration",
+        "[google-workspace] Missing auth config. Provide either (clientId + clientSecret + refreshToken) for OAuth2, or (serviceAccountKey + delegateEmail) for service account. Skipping tool registration.",
       );
       return;
     }
+
+    const authMode = authConfig.mode === "oauth2" ? "OAuth2 refresh token" : "service account";
 
     // Gmail tools factory
     api.registerTool(
       () => {
         const scopes = resolveScopes(["gmail"]);
-        const auth = createAuthClient({ serviceAccountKey, delegateEmail, scopes });
+        const auth = createAuthClient(authConfig, scopes);
         const gmailClient = gmail({ version: "v1", auth });
 
         return [
@@ -81,7 +83,7 @@ const plugin = {
     api.registerTool(
       () => {
         const scopes = resolveScopes(["google-calendar"]);
-        const auth = createAuthClient({ serviceAccountKey, delegateEmail, scopes });
+        const auth = createAuthClient(authConfig, scopes);
         const calendarClient = calendar({ version: "v3", auth });
 
         return [
@@ -96,7 +98,7 @@ const plugin = {
       { names: CALENDAR_TOOL_NAMES },
     );
 
-    api.logger.info("[google-workspace] Registered Gmail and Calendar tools");
+    api.logger.info(`[google-workspace] Registered Gmail and Calendar tools (${authMode})`);
   },
 };
 
