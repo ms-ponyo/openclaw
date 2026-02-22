@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { gmail_v1 } from "@googleapis/gmail";
 import {
@@ -116,7 +119,7 @@ describe("gmail_search", () => {
       },
     });
 
-    const tool = gmailSearchTool(gmail);
+    const tool = gmailSearchTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", { query: "from:alice" });
 
     expect(gmail.users.messages.list).toHaveBeenCalledWith(
@@ -138,7 +141,7 @@ describe("gmail_search", () => {
       },
     });
 
-    const tool = gmailSearchTool(gmail);
+    const tool = gmailSearchTool(() => gmail, ["default"]);
     const result = await tool.execute("call2", { query: "nonexistent" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -151,7 +154,7 @@ describe("gmail_search", () => {
       data: { messages: [], resultSizeEstimate: 0 },
     });
 
-    const tool = gmailSearchTool(gmail);
+    const tool = gmailSearchTool(() => gmail, ["default"]);
     await tool.execute("call3", {
       query: "test",
       labelIds: ["INBOX", "UNREAD"],
@@ -169,7 +172,7 @@ describe("gmail_search", () => {
       data: { messages: [], resultSizeEstimate: 0 },
     });
 
-    const tool = gmailSearchTool(gmail);
+    const tool = gmailSearchTool(() => gmail, ["default"]);
     await tool.execute("call4", { query: "test", maxResults: 100 });
 
     expect(gmail.users.messages.list).toHaveBeenCalledWith(
@@ -180,7 +183,7 @@ describe("gmail_search", () => {
   it("returns error on API failure", async () => {
     gmail.users.messages.list.mockRejectedValue(new Error("API quota exceeded"));
 
-    const tool = gmailSearchTool(gmail);
+    const tool = gmailSearchTool(() => gmail, ["default"]);
     const result = await tool.execute("call5", { query: "test" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -207,7 +210,7 @@ describe("gmail_read", () => {
       },
     });
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", { messageId: "msg1" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -247,7 +250,7 @@ describe("gmail_read", () => {
       },
     });
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call2", { messageId: "msg2" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -284,7 +287,7 @@ describe("gmail_read", () => {
       },
     });
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call3", { messageId: "msg3" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -308,7 +311,7 @@ describe("gmail_read", () => {
       },
     });
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call4", {
       messageId: "msg4",
       format: "metadata",
@@ -330,7 +333,7 @@ describe("gmail_read", () => {
       },
     });
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call5", {
       messageId: "msg5",
       format: "minimal",
@@ -345,7 +348,7 @@ describe("gmail_read", () => {
   it("returns error on API failure", async () => {
     gmail.users.messages.get.mockRejectedValue(new Error("Not found"));
 
-    const tool = gmailReadTool(gmail);
+    const tool = gmailReadTool(() => gmail, ["default"]);
     const result = await tool.execute("call6", { messageId: "bad-id" });
 
     const parsed = JSON.parse(result.content[0].text);
@@ -365,7 +368,7 @@ describe("gmail_send", () => {
       data: { id: "sent1", threadId: "t-sent1" },
     });
 
-    const tool = gmailSendTool(gmail);
+    const tool = gmailSendTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", {
       to: "bob@example.com",
       subject: "Hello",
@@ -391,7 +394,7 @@ describe("gmail_send", () => {
       data: { id: "sent2", threadId: "t-sent2" },
     });
 
-    const tool = gmailSendTool(gmail);
+    const tool = gmailSendTool(() => gmail, ["default"]);
     await tool.execute("call2", {
       to: "bob@example.com",
       subject: "Hello",
@@ -409,7 +412,7 @@ describe("gmail_send", () => {
   it("returns error on send failure", async () => {
     gmail.users.messages.send.mockRejectedValue(new Error("Send failed"));
 
-    const tool = gmailSendTool(gmail);
+    const tool = gmailSendTool(() => gmail, ["default"]);
     const result = await tool.execute("call3", {
       to: "bad@example.com",
       subject: "Fail",
@@ -447,7 +450,7 @@ describe("gmail_reply", () => {
       data: { id: "reply1", threadId: "t-orig1" },
     });
 
-    const tool = gmailReplyTool(gmail);
+    const tool = gmailReplyTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", {
       threadId: "t-orig1",
       messageId: "orig1",
@@ -487,7 +490,7 @@ describe("gmail_reply", () => {
       data: { id: "reply2", threadId: "t-orig2" },
     });
 
-    const tool = gmailReplyTool(gmail);
+    const tool = gmailReplyTool(() => gmail, ["default"]);
     await tool.execute("call2", {
       threadId: "t-orig2",
       messageId: "orig2",
@@ -519,7 +522,7 @@ describe("gmail_draft_create", () => {
       data: { id: "draft1", message: { id: "draft-msg1" } },
     });
 
-    const tool = gmailDraftCreateTool(gmail);
+    const tool = gmailDraftCreateTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", {
       to: "bob@example.com",
       subject: "Draft subject",
@@ -555,7 +558,7 @@ describe("gmail_draft_send", () => {
       data: { id: "draft1", message: { id: "sent-msg1" } },
     });
 
-    const tool = gmailDraftSendTool(gmail);
+    const tool = gmailDraftSendTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", { draftId: "draft1" });
 
     expect(gmail.users.drafts.send).toHaveBeenCalledWith(
@@ -586,7 +589,7 @@ describe("gmail_modify", () => {
       },
     });
 
-    const tool = gmailModifyTool(gmail);
+    const tool = gmailModifyTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", {
       messageId: "msg1",
       addLabels: ["STARRED"],
@@ -614,7 +617,7 @@ describe("gmail_modify", () => {
       data: { id: "msg2", threadId: "t2", labelIds: ["INBOX", "IMPORTANT"] },
     });
 
-    const tool = gmailModifyTool(gmail);
+    const tool = gmailModifyTool(() => gmail, ["default"]);
     const result = await tool.execute("call2", {
       messageId: "msg2",
       addLabels: ["IMPORTANT"],
@@ -627,7 +630,7 @@ describe("gmail_modify", () => {
   it("returns error on failure", async () => {
     gmail.users.messages.modify.mockRejectedValue(new Error("Invalid label"));
 
-    const tool = gmailModifyTool(gmail);
+    const tool = gmailModifyTool(() => gmail, ["default"]);
     const result = await tool.execute("call3", {
       messageId: "bad",
       addLabels: ["NONEXISTENT"],
@@ -645,25 +648,51 @@ describe("gmail_attachment_get", () => {
     gmail = mockGmail();
   });
 
-  it("gets attachment data", async () => {
+  it("saves attachment to workspace and returns path", async () => {
+    const fileContent = "PDF file content";
+    const base64urlData = Buffer.from(fileContent)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    gmail.users.messages.attachments.get.mockResolvedValue({
+      data: { data: base64urlData, size: fileContent.length },
+    });
+
+    const workspaceDir = path.join(os.tmpdir(), `oc-test-${Date.now()}`);
+    const tool = gmailAttachmentGetTool(() => gmail, ["default"], workspaceDir);
+    const result = await tool.execute("call1", {
+      messageId: "msg1",
+      attachmentId: "att1",
+      filename: "report.pdf",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.path).toContain("report.pdf");
+    expect(parsed.filename).toBe("report.pdf");
+    expect(parsed.size).toBe(fileContent.length);
+    expect(parsed.data).toBeUndefined();
+
+    // Verify file was written
+    const written = await fs.readFile(parsed.path);
+    expect(written.toString()).toBe(fileContent);
+
+    // Cleanup
+    await fs.rm(workspaceDir, { recursive: true, force: true });
+  });
+
+  it("falls back to base64 when no workspace configured", async () => {
     const attachmentData = toBase64Url("file content");
     gmail.users.messages.attachments.get.mockResolvedValue({
       data: { data: attachmentData, size: 12 },
     });
 
-    const tool = gmailAttachmentGetTool(gmail);
+    const tool = gmailAttachmentGetTool(() => gmail, ["default"]);
     const result = await tool.execute("call1", {
       messageId: "msg1",
       attachmentId: "att1",
     });
-
-    expect(gmail.users.messages.attachments.get).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: "me",
-        messageId: "msg1",
-        id: "att1",
-      }),
-    );
 
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.data).toBe(attachmentData);

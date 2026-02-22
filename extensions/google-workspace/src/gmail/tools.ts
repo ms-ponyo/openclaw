@@ -1,4 +1,6 @@
-import { Type } from "@sinclair/typebox";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { Type, type TSchema } from "@sinclair/typebox";
 import type { gmail_v1 } from "@googleapis/gmail";
 import { json, errorResult, withRetry } from "../shared.js";
 import type { GmailMessageSummary, GmailMessageFull } from "./types.js";
@@ -148,16 +150,37 @@ function buildRawEmail(params: {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-account helpers
+// ---------------------------------------------------------------------------
+
+function accountParam(accountIds: string[]): Record<string, TSchema> {
+  if (accountIds.length <= 1) return {};
+  return {
+    account: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        description: "Google account ID to use.",
+        enum: accountIds,
+      }),
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Tool factories
 // ---------------------------------------------------------------------------
 
-export function gmailSearchTool(gmail: gmail_v1.Gmail) {
+export function gmailSearchTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_search",
     label: "Gmail Search",
     description:
       "Search Gmail messages by query. Returns message summaries including subject, from, to, date, and snippet.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       query: Type.String({ description: "Gmail search query (same syntax as Gmail search box)." }),
       maxResults: Type.Optional(
         Type.Number({
@@ -174,6 +197,7 @@ export function gmailSearchTool(gmail: gmail_v1.Gmail) {
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const query = params.query as string;
         const maxResults = Math.min(
           Math.max((params.maxResults as number) ?? 10, 1),
@@ -220,13 +244,17 @@ export function gmailSearchTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailReadTool(gmail: gmail_v1.Gmail) {
+export function gmailReadTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_read",
     label: "Gmail Read",
     description:
       "Read a specific Gmail message by ID. Returns full message content including body, headers, and attachment metadata.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       messageId: Type.String({ description: "The Gmail message ID to read." }),
       format: Type.Optional(
         Type.Unsafe<"full" | "metadata" | "minimal">({
@@ -238,6 +266,7 @@ export function gmailReadTool(gmail: gmail_v1.Gmail) {
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const messageId = params.messageId as string;
         const format = (params.format as string) ?? "full";
 
@@ -269,12 +298,16 @@ export function gmailReadTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailSendTool(gmail: gmail_v1.Gmail) {
+export function gmailSendTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_send",
     label: "Gmail Send",
     description: "Send a new email message via Gmail.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       to: Type.String({ description: "Recipient email address." }),
       subject: Type.String({ description: "Email subject line." }),
       body: Type.String({ description: "Email body text." }),
@@ -283,6 +316,7 @@ export function gmailSendTool(gmail: gmail_v1.Gmail) {
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const raw = buildRawEmail({
           to: params.to as string,
           subject: params.subject as string,
@@ -310,13 +344,17 @@ export function gmailSendTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailReplyTool(gmail: gmail_v1.Gmail) {
+export function gmailReplyTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_reply",
     label: "Gmail Reply",
     description:
       "Reply to an existing email message in the same thread. Automatically sets In-Reply-To and References headers.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       threadId: Type.String({ description: "The thread ID to reply in." }),
       messageId: Type.String({ description: "The message ID to reply to." }),
       body: Type.String({ description: "Reply body text." }),
@@ -326,6 +364,7 @@ export function gmailReplyTool(gmail: gmail_v1.Gmail) {
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const threadId = params.threadId as string;
         const messageId = params.messageId as string;
         const body = params.body as string;
@@ -387,18 +426,23 @@ export function gmailReplyTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailDraftCreateTool(gmail: gmail_v1.Gmail) {
+export function gmailDraftCreateTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_draft_create",
     label: "Gmail Draft Create",
     description: "Create a new email draft in Gmail.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       to: Type.String({ description: "Recipient email address." }),
       subject: Type.String({ description: "Email subject line." }),
       body: Type.String({ description: "Email body text." }),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const raw = buildRawEmail({
           to: params.to as string,
           subject: params.subject as string,
@@ -426,16 +470,21 @@ export function gmailDraftCreateTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailDraftSendTool(gmail: gmail_v1.Gmail) {
+export function gmailDraftSendTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_draft_send",
     label: "Gmail Draft Send",
     description: "Send an existing Gmail draft by its draft ID.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       draftId: Type.String({ description: "The draft ID to send." }),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const draftId = params.draftId as string;
 
         const res = await withRetry(() =>
@@ -457,13 +506,17 @@ export function gmailDraftSendTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailModifyTool(gmail: gmail_v1.Gmail) {
+export function gmailModifyTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+) {
   return {
     name: "gmail_modify",
     label: "Gmail Modify",
     description:
       "Modify labels on a Gmail message. Add or remove labels such as INBOX, UNREAD, STARRED, etc.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       messageId: Type.String({ description: "The message ID to modify." }),
       addLabels: Type.Optional(
         Type.Array(Type.String(), { description: "Label IDs to add." }),
@@ -474,6 +527,7 @@ export function gmailModifyTool(gmail: gmail_v1.Gmail) {
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const messageId = params.messageId as string;
         const addLabelIds = params.addLabels as string[] | undefined;
         const removeLabelIds = params.removeLabels as string[] | undefined;
@@ -502,19 +556,30 @@ export function gmailModifyTool(gmail: gmail_v1.Gmail) {
   };
 }
 
-export function gmailAttachmentGetTool(gmail: gmail_v1.Gmail) {
+export function gmailAttachmentGetTool(
+  resolveClient: (accountId?: string) => gmail_v1.Gmail,
+  accountIds: string[],
+  workspaceDir?: string,
+) {
   return {
     name: "gmail_attachment_get",
     label: "Gmail Attachment Get",
-    description: "Download an attachment from a Gmail message. Returns base64url-encoded data.",
+    description:
+      "Download an attachment from a Gmail message. Saves to workspace and returns the file path. Pass the filename from gmail_read attachment metadata.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       messageId: Type.String({ description: "The message ID containing the attachment." }),
       attachmentId: Type.String({ description: "The attachment ID to retrieve." }),
+      filename: Type.Optional(
+        Type.String({ description: "Filename for the saved attachment (from gmail_read metadata)." }),
+      ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       try {
+        const gmail = resolveClient(params.account as string | undefined);
         const messageId = params.messageId as string;
         const attachmentId = params.attachmentId as string;
+        const filename = (params.filename as string | undefined) ?? "attachment";
 
         const res = await withRetry(() =>
           gmail.users.messages.attachments.get({
@@ -524,6 +589,29 @@ export function gmailAttachmentGetTool(gmail: gmail_v1.Gmail) {
           }),
         );
 
+        const base64url = res.data.data;
+        if (!base64url) {
+          return json({ error: "No attachment data returned" });
+        }
+
+        // Convert base64url to standard base64
+        const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+        const buffer = Buffer.from(base64, "base64");
+
+        if (workspaceDir) {
+          const attachmentsDir = path.join(workspaceDir, ".attachments");
+          await fs.mkdir(attachmentsDir, { recursive: true });
+          const safeFilename = `${messageId}-${filename}`.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const filePath = path.join(attachmentsDir, safeFilename);
+          await fs.writeFile(filePath, buffer);
+          return json({
+            path: filePath,
+            filename,
+            size: res.data.size,
+          });
+        }
+
+        // Fallback: return base64 data (no workspace configured)
         return json({
           data: res.data.data,
           size: res.data.size,
