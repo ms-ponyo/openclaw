@@ -53,6 +53,7 @@ RUN if [ -n "$OPENCLAW_INSTALL_BROWSER" ]; then \
       PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright \
       node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
       chown -R node:node /home/node/.cache/ms-playwright && \
+      ln -sf "$(find /home/node/.cache/ms-playwright -name chrome -path '*/chrome-linux*/chrome' | head -1)" /usr/bin/chromium && \
       apt-get clean && \
       rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     fi
