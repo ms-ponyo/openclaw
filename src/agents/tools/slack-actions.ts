@@ -352,6 +352,12 @@ export async function handleSlackAction(
     }
 
     const buffer = Buffer.from(base64, "base64");
+    const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB safety limit
+    if (buffer.byteLength > MAX_UPLOAD_BYTES) {
+      throw new Error(
+        `Attachment too large (${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`,
+      );
+    }
     const uploadArgs: Record<string, unknown> = {
       channel_id: channelId,
       file: buffer,
