@@ -18,6 +18,7 @@ import {
   unpinSlackMessage,
 } from "../../slack/actions.js";
 import { parseSlackBlocksInput } from "../../slack/blocks-input.js";
+import { createSlackWebClient } from "../../slack/client.js";
 import { recordSlackThreadParticipation } from "../../slack/sent-thread-cache.js";
 import { parseSlackTarget, resolveSlackChannelId } from "../../slack/targets.js";
 import { withNormalizedTimestamp } from "../date-time.js";
@@ -318,6 +319,72 @@ export async function handleSlackAction(
       default:
         break;
     }
+  }
+
+  if (action === "sendAttachment") {
+    if (!isActionEnabled("messages")) {
+      throw new Error("Slack messages are disabled.");
+    }
+    const to = readStringParam(params, "to", { required: true });
+    const base64 = readStringParam(params, "buffer", { trim: false, required: true });
+    const filename = readStringParam(params, "filename") ?? "attachment";
+    const contentType = readStringParam(params, "contentType");
+    const caption = readStringParam(params, "caption", { allowEmpty: true });
+    const threadTs = resolveThreadTsFromContext(
+      readStringParam(params, "threadTs"),
+      to,
+      context,
+    );
+
+    const token = getTokenForOperation("write");
+    if (!token) {
+      throw new Error("Slack bot token is required for file uploads.");
+    }
+    const client = createSlackWebClient(token);
+
+    // Resolve channel ID (handle user DMs vs channels)
+    const parsedTarget = parseSlackTarget(to, { defaultKind: "channel" });
+    let channelId: string;
+    if (parsedTarget?.kind === "user") {
+      const dm = await client.conversations.open({ users: parsedTarget.id });
+      channelId = dm.channel?.id ?? parsedTarget.id;
+    } else {
+      channelId = parsedTarget?.id ?? to;
+    }
+
+    const buffer = Buffer.from(base64, "base64");
+    const uploadArgs: Record<string, unknown> = {
+      channel_id: channelId,
+      file: buffer,
+      filename,
+    };
+    if (caption) {
+      uploadArgs.initial_comment = caption;
+    }
+    if (threadTs) {
+      uploadArgs.thread_ts = threadTs;
+    }
+    const response = await client.files.uploadV2(
+      uploadArgs as unknown as Parameters<typeof client.files.uploadV2>[0],
+    );
+
+    const parsed = response as {
+      files?: Array<{ id?: string; name?: string }>;
+      file?: { id?: string; name?: string };
+    };
+    const fileId =
+      parsed.files?.[0]?.id ??
+      parsed.file?.id ??
+      "unknown";
+
+    // Track "first" reply mode
+    if (context?.hasRepliedRef && context.currentChannelId) {
+      if (parsedTarget?.kind === "channel" && parsedTarget.id === context.currentChannelId) {
+        context.hasRepliedRef.value = true;
+      }
+    }
+
+    return jsonResult({ ok: true, fileId, filename });
   }
 
   if (pinActions.has(action)) {
