@@ -198,7 +198,6 @@ export async function handleSlackMessageAction(params: {
     const to = readStringParam(actionParams, "to", { required: true });
     const buffer = readStringParam(actionParams, "buffer", { trim: false });
     const filename = readStringParam(actionParams, "filename");
-    const contentType = readStringParam(actionParams, "contentType");
     const caption = readStringParam(actionParams, "caption", { allowEmpty: true });
     const threadId2 = readStringParam(actionParams, "threadId");
     const replyTo = readStringParam(actionParams, "replyTo");
@@ -211,7 +210,6 @@ export async function handleSlackMessageAction(params: {
         to,
         buffer,
         filename,
-        contentType,
         caption,
         threadTs: threadId2 ?? replyTo ?? undefined,
         accountId,

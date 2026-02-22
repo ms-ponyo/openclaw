@@ -328,7 +328,6 @@ export async function handleSlackAction(
     const to = readStringParam(params, "to", { required: true });
     const base64 = readStringParam(params, "buffer", { trim: false, required: true });
     const filename = readStringParam(params, "filename") ?? "attachment";
-    const contentType = readStringParam(params, "contentType");
     const caption = readStringParam(params, "caption", { allowEmpty: true });
     const threadTs = resolveThreadTsFromContext(
       readStringParam(params, "threadTs"),
