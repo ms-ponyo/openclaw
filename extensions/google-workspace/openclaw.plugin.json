@@ -28,6 +28,19 @@
       "delegateEmail": {
         "type": "string",
         "description": "Workspace email to impersonate via domain-wide delegation (for Google Workspace)"
+      },
+      "accounts": {
+        "type": "object",
+        "description": "Named accounts map for multi-account support. Each key is an account ID, value has account-specific credentials.",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "refreshToken": { "type": "string" },
+            "serviceAccountKey": { "type": "string" },
+            "delegateEmail": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
       }
     },
     "additionalProperties": false

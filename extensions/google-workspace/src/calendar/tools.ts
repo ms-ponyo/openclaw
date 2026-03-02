@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type, type TSchema } from "@sinclair/typebox";
 import type { calendar_v3 } from "@googleapis/calendar";
 
 import { json, errorResult, withRetry } from "../shared.js";
@@ -45,19 +45,42 @@ export function formatEvent(
 }
 
 // ---------------------------------------------------------------------------
+// Multi-account helpers
+// ---------------------------------------------------------------------------
+
+function accountParam(accountIds: string[]): Record<string, TSchema> {
+  if (accountIds.length <= 1) return {};
+  return {
+    account: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        description: "Google account ID to use.",
+        enum: accountIds,
+      }),
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Tool factories
 // ---------------------------------------------------------------------------
 
-export function calendarListCalendarsTool(calendar: calendar_v3.Calendar) {
+export function calendarListCalendarsTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_list",
     label: "List Calendars",
     description:
       "List all calendars the user has access to, including their IDs. Use this to discover calendar IDs for other tools.",
-    parameters: Type.Object({}),
-    async execute(_id: string, _params: Record<string, unknown>) {
+    parameters: Type.Object({
+      ...accountParam(accountIds),
+    }),
+    async execute(_id: string, params: Record<string, unknown>) {
       try {
-        const res = await withRetry(() => calendar.calendarList.list());
+        const cal = resolveClient(params.account as string | undefined);
+        const res = await withRetry(() => cal.calendarList.list());
         const calendars = (res.data.items ?? []).map((c) => ({
           id: c.id ?? "",
           summary: c.summary ?? "(no title)",
@@ -74,13 +97,17 @@ export function calendarListCalendarsTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarListEventsTool(calendar: calendar_v3.Calendar) {
+export function calendarListEventsTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_list_events",
     label: "List Calendar Events",
     description:
       "List events from a Google Calendar within a time range. Defaults to the primary calendar and the next 7 days.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       calendarId: Type.Optional(
         Type.String({ description: "Calendar ID (default: primary)" }),
       ),
@@ -107,6 +134,7 @@ export function calendarListEventsTool(calendar: calendar_v3.Calendar) {
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const calendarId =
         (typeof params.calendarId === "string" && params.calendarId.trim()) ||
         "primary";
@@ -125,7 +153,7 @@ export function calendarListEventsTool(calendar: calendar_v3.Calendar) {
 
       try {
         const res = await withRetry(() =>
-          calendar.events.list({
+          cal.events.list({
             calendarId,
             timeMin,
             timeMax,
@@ -149,18 +177,23 @@ export function calendarListEventsTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarGetEventTool(calendar: calendar_v3.Calendar) {
+export function calendarGetEventTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_get_event",
     label: "Get Calendar Event",
     description: "Get a single event from a Google Calendar by its event ID.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       calendarId: Type.Optional(
         Type.String({ description: "Calendar ID (default: primary)" }),
       ),
       eventId: Type.String({ description: "The event ID to retrieve" }),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const calendarId =
         (typeof params.calendarId === "string" && params.calendarId.trim()) ||
         "primary";
@@ -172,7 +205,7 @@ export function calendarGetEventTool(calendar: calendar_v3.Calendar) {
 
       try {
         const res = await withRetry(() =>
-          calendar.events.get({ calendarId, eventId }),
+          cal.events.get({ calendarId, eventId }),
         );
         return json(formatEvent(res.data));
       } catch (err) {
@@ -182,12 +215,16 @@ export function calendarGetEventTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarCreateEventTool(calendar: calendar_v3.Calendar) {
+export function calendarCreateEventTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_create_event",
     label: "Create Calendar Event",
     description: "Create a new event on a Google Calendar.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       calendarId: Type.Optional(
         Type.String({ description: "Calendar ID (default: primary)" }),
       ),
@@ -219,6 +256,7 @@ export function calendarCreateEventTool(calendar: calendar_v3.Calendar) {
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const calendarId =
         (typeof params.calendarId === "string" && params.calendarId.trim()) ||
         "primary";
@@ -261,7 +299,7 @@ export function calendarCreateEventTool(calendar: calendar_v3.Calendar) {
 
       try {
         const res = await withRetry(() =>
-          calendar.events.insert({
+          cal.events.insert({
             calendarId,
             requestBody,
             ...(sendUpdates ? { sendUpdates } : {}),
@@ -275,13 +313,17 @@ export function calendarCreateEventTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarUpdateEventTool(calendar: calendar_v3.Calendar) {
+export function calendarUpdateEventTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_update_event",
     label: "Update Calendar Event",
     description:
       "Update an existing event on a Google Calendar. Only provided fields are modified.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       calendarId: Type.Optional(
         Type.String({ description: "Calendar ID (default: primary)" }),
       ),
@@ -314,6 +356,7 @@ export function calendarUpdateEventTool(calendar: calendar_v3.Calendar) {
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const calendarId =
         (typeof params.calendarId === "string" && params.calendarId.trim()) ||
         "primary";
@@ -353,7 +396,7 @@ export function calendarUpdateEventTool(calendar: calendar_v3.Calendar) {
 
       try {
         const res = await withRetry(() =>
-          calendar.events.patch({
+          cal.events.patch({
             calendarId,
             eventId,
             requestBody,
@@ -368,12 +411,16 @@ export function calendarUpdateEventTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarDeleteEventTool(calendar: calendar_v3.Calendar) {
+export function calendarDeleteEventTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_delete_event",
     label: "Delete Calendar Event",
     description: "Delete an event from a Google Calendar.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       calendarId: Type.Optional(
         Type.String({ description: "Calendar ID (default: primary)" }),
       ),
@@ -388,6 +435,7 @@ export function calendarDeleteEventTool(calendar: calendar_v3.Calendar) {
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const calendarId =
         (typeof params.calendarId === "string" && params.calendarId.trim()) ||
         "primary";
@@ -404,7 +452,7 @@ export function calendarDeleteEventTool(calendar: calendar_v3.Calendar) {
 
       try {
         await withRetry(() =>
-          calendar.events.delete({
+          cal.events.delete({
             calendarId,
             eventId,
             ...(sendUpdates ? { sendUpdates } : {}),
@@ -418,13 +466,17 @@ export function calendarDeleteEventTool(calendar: calendar_v3.Calendar) {
   };
 }
 
-export function calendarFreebusyTool(calendar: calendar_v3.Calendar) {
+export function calendarFreebusyTool(
+  resolveClient: (accountId?: string) => calendar_v3.Calendar,
+  accountIds: string[],
+) {
   return {
     name: "calendar_freebusy",
     label: "Check Free/Busy",
     description:
       "Query the free/busy status for one or more users within a time range.",
     parameters: Type.Object({
+      ...accountParam(accountIds),
       timeMin: Type.String({
         description: "Start of time range (ISO 8601)",
       }),
@@ -436,6 +488,7 @@ export function calendarFreebusyTool(calendar: calendar_v3.Calendar) {
       }),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
+      const cal = resolveClient(params.account as string | undefined);
       const timeMin =
         typeof params.timeMin === "string" ? params.timeMin.trim() : "";
       if (!timeMin) {
@@ -457,7 +510,7 @@ export function calendarFreebusyTool(calendar: calendar_v3.Calendar) {
 
       try {
         const res = await withRetry(() =>
-          calendar.freebusy.query({
+          cal.freebusy.query({
             requestBody: {
               timeMin,
               timeMax,
@@ -468,14 +521,14 @@ export function calendarFreebusyTool(calendar: calendar_v3.Calendar) {
 
         const calendars = res.data.calendars ?? {};
         const availability = emails.map((email) => {
-          const cal = calendars[email];
+          const entry = calendars[email];
           return {
             email,
-            busy: (cal?.busy ?? []).map((period) => ({
+            busy: (entry?.busy ?? []).map((period) => ({
               start: period.start ?? "",
               end: period.end ?? "",
             })),
-            errors: cal?.errors?.map((e) => e.reason ?? String(e)) ?? [],
+            errors: entry?.errors?.map((e) => e.reason ?? String(e)) ?? [],
           };
         });
 

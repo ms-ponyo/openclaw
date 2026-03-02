@@ -116,7 +116,7 @@ describe("calendar_list_events", () => {
       data: { items: [sampleEvent, allDayEvent] },
     });
 
-    const tool = calendarListEventsTool(cal);
+    const tool = calendarListEventsTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", {});
     const data = parse(result);
 
@@ -140,7 +140,7 @@ describe("calendar_list_events", () => {
       data: { items: [] },
     });
 
-    const tool = calendarListEventsTool(cal);
+    const tool = calendarListEventsTool(() => cal, ["default"]);
     await tool.execute("call-2", {
       calendarId: "team@example.com",
       query: "standup",
@@ -159,7 +159,7 @@ describe("calendar_list_events", () => {
       data: { items: [] },
     });
 
-    const tool = calendarListEventsTool(cal);
+    const tool = calendarListEventsTool(() => cal, ["default"]);
 
     await tool.execute("call-3", { maxResults: 100 });
     expect((cal.events.list as ReturnType<typeof vi.fn>).mock.calls[0][0].maxResults).toBe(50);
@@ -174,7 +174,7 @@ describe("calendar_list_events", () => {
       new Error("Not Found"),
     );
 
-    const tool = calendarListEventsTool(cal);
+    const tool = calendarListEventsTool(() => cal, ["default"]);
     const result = await tool.execute("call-5", {});
     const data = parse(result);
     expect(data.error).toBe("Not Found");
@@ -192,7 +192,7 @@ describe("calendar_get_event", () => {
       data: sampleEvent,
     });
 
-    const tool = calendarGetEventTool(cal);
+    const tool = calendarGetEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", { eventId: "evt-1" });
     const data = parse(result);
 
@@ -206,7 +206,7 @@ describe("calendar_get_event", () => {
 
   it("returns error when eventId is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarGetEventTool(cal);
+    const tool = calendarGetEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-2", {});
     const data = parse(result);
     expect(data.error).toBe("eventId required");
@@ -228,7 +228,7 @@ describe("calendar_create_event", () => {
       data: createdEvent,
     });
 
-    const tool = calendarCreateEventTool(cal);
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", {
       summary: "Team standup",
       start: "2026-02-21T09:00:00Z",
@@ -257,7 +257,7 @@ describe("calendar_create_event", () => {
 
   it("returns error when summary is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarCreateEventTool(cal);
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-2", {
       start: "2026-02-21T09:00:00Z",
       end: "2026-02-21T09:30:00Z",
@@ -268,7 +268,7 @@ describe("calendar_create_event", () => {
 
   it("returns error when start is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarCreateEventTool(cal);
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-3", {
       summary: "Test",
       end: "2026-02-21T09:30:00Z",
@@ -279,7 +279,7 @@ describe("calendar_create_event", () => {
 
   it("returns error when end is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarCreateEventTool(cal);
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-4", {
       summary: "Test",
       start: "2026-02-21T09:00:00Z",
@@ -300,7 +300,7 @@ describe("calendar_update_event", () => {
       data: { ...sampleEvent, summary: "Updated standup" },
     });
 
-    const tool = calendarUpdateEventTool(cal);
+    const tool = calendarUpdateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", {
       eventId: "evt-1",
       summary: "Updated standup",
@@ -317,7 +317,7 @@ describe("calendar_update_event", () => {
 
   it("returns error when eventId is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarUpdateEventTool(cal);
+    const tool = calendarUpdateEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-2", { summary: "something" });
     const data = parse(result);
     expect(data.error).toBe("eventId required");
@@ -333,7 +333,7 @@ describe("calendar_delete_event", () => {
     const cal = mockCalendar();
     (cal.events.delete as ReturnType<typeof vi.fn>).mockResolvedValue({});
 
-    const tool = calendarDeleteEventTool(cal);
+    const tool = calendarDeleteEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", {
       eventId: "evt-1",
       sendUpdates: "none",
@@ -350,7 +350,7 @@ describe("calendar_delete_event", () => {
 
   it("returns error when eventId is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarDeleteEventTool(cal);
+    const tool = calendarDeleteEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-2", {});
     const data = parse(result);
     expect(data.error).toBe("eventId required");
@@ -362,7 +362,7 @@ describe("calendar_delete_event", () => {
       new Error("Forbidden"),
     );
 
-    const tool = calendarDeleteEventTool(cal);
+    const tool = calendarDeleteEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-3", { eventId: "evt-1" });
     const data = parse(result);
     expect(data.error).toBe("Forbidden");
@@ -393,7 +393,7 @@ describe("calendar_freebusy", () => {
       },
     });
 
-    const tool = calendarFreebusyTool(cal);
+    const tool = calendarFreebusyTool(() => cal, ["default"]);
     const result = await tool.execute("call-1", {
       timeMin: "2026-02-21T00:00:00Z",
       timeMax: "2026-02-22T00:00:00Z",
@@ -422,7 +422,7 @@ describe("calendar_freebusy", () => {
 
   it("returns error when timeMin is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarFreebusyTool(cal);
+    const tool = calendarFreebusyTool(() => cal, ["default"]);
     const result = await tool.execute("call-2", {
       timeMax: "2026-02-22T00:00:00Z",
       emails: ["alice@example.com"],
@@ -433,7 +433,7 @@ describe("calendar_freebusy", () => {
 
   it("returns error when timeMax is missing", async () => {
     const cal = mockCalendar();
-    const tool = calendarFreebusyTool(cal);
+    const tool = calendarFreebusyTool(() => cal, ["default"]);
     const result = await tool.execute("call-3", {
       timeMin: "2026-02-21T00:00:00Z",
       emails: ["alice@example.com"],
@@ -444,7 +444,7 @@ describe("calendar_freebusy", () => {
 
   it("returns error when emails is empty", async () => {
     const cal = mockCalendar();
-    const tool = calendarFreebusyTool(cal);
+    const tool = calendarFreebusyTool(() => cal, ["default"]);
     const result = await tool.execute("call-4", {
       timeMin: "2026-02-21T00:00:00Z",
       timeMax: "2026-02-22T00:00:00Z",

@@ -123,3 +123,43 @@ export function resolveAuthConfig(pluginConfig: Record<string, unknown>): AuthCo
   }
   return null;
 }
+
+/**
+ * Resolve account configs from plugin config.
+ *
+ * If the config contains an `accounts` map, each entry is resolved as a
+ * separate account, inheriting top-level `clientId`/`clientSecret` as defaults.
+ * Otherwise, falls back to a single `"default"` account via `resolveAuthConfig`.
+ *
+ * Returns null if no valid accounts could be resolved.
+ */
+export function resolveAccountConfigs(
+  pluginConfig: Record<string, unknown>,
+): Map<string, AuthConfig> | null {
+  const accounts = pluginConfig.accounts as Record<string, Record<string, unknown>> | undefined;
+
+  if (accounts && typeof accounts === "object") {
+    const result = new Map<string, AuthConfig>();
+    const topClientId = pluginConfig.clientId ? String(pluginConfig.clientId) : undefined;
+    const topClientSecret = pluginConfig.clientSecret ? String(pluginConfig.clientSecret) : undefined;
+
+    for (const [id, accountConfig] of Object.entries(accounts)) {
+      const merged: Record<string, unknown> = {
+        ...(topClientId ? { clientId: topClientId } : {}),
+        ...(topClientSecret ? { clientSecret: topClientSecret } : {}),
+        ...accountConfig,
+      };
+      const authConfig = resolveAuthConfig(merged);
+      if (authConfig) {
+        result.set(id, authConfig);
+      }
+    }
+
+    return result.size > 0 ? result : null;
+  }
+
+  // Legacy single-account fallback
+  const authConfig = resolveAuthConfig(pluginConfig);
+  if (!authConfig) return null;
+  return new Map([["default", authConfig]]);
+}
