@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import type { calendar_v3 } from "@googleapis/calendar";
-
+import { describe, it, expect, vi } from "vitest";
 import {
   calendarListEventsTool,
   calendarGetEventTool,
@@ -57,6 +56,24 @@ const allDayEvent: calendar_v3.Schema$Event = {
   status: "confirmed",
 };
 
+const recurringEvent: calendar_v3.Schema$Event = {
+  id: "evt-3",
+  summary: "Weekly standup",
+  start: { dateTime: "2026-03-09T09:00:00Z" },
+  end: { dateTime: "2026-03-09T09:30:00Z" },
+  status: "confirmed",
+  recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+};
+
+const recurringInstance: calendar_v3.Schema$Event = {
+  id: "evt-3_20260316T090000Z",
+  summary: "Weekly standup",
+  start: { dateTime: "2026-03-16T09:00:00Z" },
+  end: { dateTime: "2026-03-16T09:30:00Z" },
+  status: "confirmed",
+  recurringEventId: "evt-3",
+};
+
 // ---------------------------------------------------------------------------
 // formatEvent
 // ---------------------------------------------------------------------------
@@ -102,6 +119,20 @@ describe("formatEvent", () => {
     expect(result.location).toBeUndefined();
     expect(result.htmlLink).toBeUndefined();
     expect(result.attendees).toBeUndefined();
+    expect(result.recurrence).toBeUndefined();
+    expect(result.recurringEventId).toBeUndefined();
+  });
+
+  it("includes recurrence rules on a recurring event", () => {
+    const result = formatEvent(recurringEvent);
+    expect(result.recurrence).toEqual(["RRULE:FREQ=WEEKLY;BYDAY=MO"]);
+    expect(result.recurringEventId).toBeUndefined();
+  });
+
+  it("includes recurringEventId on an instance of a recurring event", () => {
+    const result = formatEvent(recurringInstance);
+    expect(result.recurringEventId).toBe("evt-3");
+    expect(result.recurrence).toBeUndefined();
   });
 });
 
@@ -170,9 +201,7 @@ describe("calendar_list_events", () => {
 
   it("returns error on API failure", async () => {
     const cal = mockCalendar();
-    (cal.events.list as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Not Found"),
-    );
+    (cal.events.list as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Not Found"));
 
     const tool = calendarListEventsTool(() => cal, ["default"]);
     const result = await tool.execute("call-5", {});
@@ -287,6 +316,45 @@ describe("calendar_create_event", () => {
     const data = parse(result);
     expect(data.error).toBe("end required");
   });
+
+  it("creates a recurring event with RRULE", async () => {
+    const cal = mockCalendar();
+    (cal.events.insert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: recurringEvent,
+    });
+
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
+    const result = await tool.execute("call-5", {
+      summary: "Weekly standup",
+      start: "2026-03-09T09:00:00Z",
+      end: "2026-03-09T09:30:00Z",
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+    });
+
+    const data = parse(result);
+    expect(data.recurrence).toEqual(["RRULE:FREQ=WEEKLY;BYDAY=MO"]);
+
+    const args = (cal.events.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.requestBody.recurrence).toEqual(["RRULE:FREQ=WEEKLY;BYDAY=MO"]);
+  });
+
+  it("creates an all-day event using date format", async () => {
+    const cal = mockCalendar();
+    (cal.events.insert as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: allDayEvent,
+    });
+
+    const tool = calendarCreateEventTool(() => cal, ["default"]);
+    await tool.execute("call-6", {
+      summary: "Company holiday",
+      start: "2026-03-01",
+      end: "2026-03-02",
+    });
+
+    const args = (cal.events.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.requestBody.start).toEqual({ date: "2026-03-01" });
+    expect(args.requestBody.end).toEqual({ date: "2026-03-02" });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -321,6 +389,38 @@ describe("calendar_update_event", () => {
     const result = await tool.execute("call-2", { summary: "something" });
     const data = parse(result);
     expect(data.error).toBe("eventId required");
+  });
+
+  it("patches recurrence rules", async () => {
+    const cal = mockCalendar();
+    (cal.events.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: recurringEvent,
+    });
+
+    const tool = calendarUpdateEventTool(() => cal, ["default"]);
+    await tool.execute("call-3", {
+      eventId: "evt-3",
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+    });
+
+    const args = (cal.events.patch as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.requestBody.recurrence).toEqual(["RRULE:FREQ=WEEKLY;BYDAY=MO"]);
+  });
+
+  it("removes recurrence with empty array", async () => {
+    const cal = mockCalendar();
+    (cal.events.patch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...sampleEvent },
+    });
+
+    const tool = calendarUpdateEventTool(() => cal, ["default"]);
+    await tool.execute("call-4", {
+      eventId: "evt-1",
+      recurrence: [],
+    });
+
+    const args = (cal.events.patch as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args.requestBody.recurrence).toEqual([]);
   });
 });
 
@@ -358,9 +458,7 @@ describe("calendar_delete_event", () => {
 
   it("returns error on API failure", async () => {
     const cal = mockCalendar();
-    (cal.events.delete as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Forbidden"),
-    );
+    (cal.events.delete as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Forbidden"));
 
     const tool = calendarDeleteEventTool(() => cal, ["default"]);
     const result = await tool.execute("call-3", { eventId: "evt-1" });
@@ -380,9 +478,7 @@ describe("calendar_freebusy", () => {
       data: {
         calendars: {
           "alice@example.com": {
-            busy: [
-              { start: "2026-02-21T09:00:00Z", end: "2026-02-21T10:00:00Z" },
-            ],
+            busy: [{ start: "2026-02-21T09:00:00Z", end: "2026-02-21T10:00:00Z" }],
             errors: [],
           },
           "bob@example.com": {

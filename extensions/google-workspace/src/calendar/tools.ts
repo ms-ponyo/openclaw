@@ -1,6 +1,5 @@
-import { Type, type TSchema } from "@sinclair/typebox";
 import type { calendar_v3 } from "@googleapis/calendar";
-
+import { Type, type TSchema } from "@sinclair/typebox";
 import { json, errorResult, withRetry } from "../shared.js";
 import type { CalendarEventSummary } from "./types.js";
 
@@ -8,9 +7,7 @@ import type { CalendarEventSummary } from "./types.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function formatEvent(
-  event: calendar_v3.Schema$Event,
-): CalendarEventSummary {
+export function formatEvent(event: calendar_v3.Schema$Event): CalendarEventSummary {
   const start = event.start?.dateTime ?? event.start?.date ?? "";
   const end = event.end?.dateTime ?? event.end?.date ?? "";
 
@@ -28,9 +25,7 @@ export function formatEvent(
 
   if (event.attendees && event.attendees.length > 0) {
     result.attendees = event.attendees.map((a) => {
-      const attendee: CalendarEventSummary["attendees"] extends
-        | Array<infer T>
-        | undefined
+      const attendee: CalendarEventSummary["attendees"] extends Array<infer T> | undefined
         ? T
         : never = {
         email: a.email ?? "",
@@ -39,6 +34,13 @@ export function formatEvent(
       if (a.responseStatus) attendee.responseStatus = a.responseStatus;
       return attendee;
     });
+  }
+
+  if (event.recurrence && event.recurrence.length > 0) {
+    result.recurrence = event.recurrence;
+  }
+  if (event.recurringEventId) {
+    result.recurringEventId = event.recurringEventId;
   }
 
   return result;
@@ -108,9 +110,7 @@ export function calendarListEventsTool(
       "List events from a Google Calendar within a time range. Defaults to the primary calendar and the next 7 days.",
     parameters: Type.Object({
       ...accountParam(accountIds),
-      calendarId: Type.Optional(
-        Type.String({ description: "Calendar ID (default: primary)" }),
-      ),
+      calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
       timeMin: Type.Optional(
         Type.String({
           description: "Start of time range (ISO 8601). Defaults to now.",
@@ -118,8 +118,7 @@ export function calendarListEventsTool(
       ),
       timeMax: Type.Optional(
         Type.String({
-          description:
-            "End of time range (ISO 8601). Defaults to 7 days from now.",
+          description: "End of time range (ISO 8601). Defaults to 7 days from now.",
         }),
       ),
       maxResults: Type.Optional(
@@ -129,18 +128,14 @@ export function calendarListEventsTool(
           description: "Max events to return (1-50, default 20)",
         }),
       ),
-      query: Type.Optional(
-        Type.String({ description: "Free-text search query" }),
-      ),
+      query: Type.Optional(Type.String({ description: "Free-text search query" })),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
       const calendarId =
-        (typeof params.calendarId === "string" && params.calendarId.trim()) ||
-        "primary";
+        (typeof params.calendarId === "string" && params.calendarId.trim()) || "primary";
       const now = new Date().toISOString();
-      const timeMin =
-        (typeof params.timeMin === "string" && params.timeMin.trim()) || now;
+      const timeMin = (typeof params.timeMin === "string" && params.timeMin.trim()) || now;
       const timeMax =
         (typeof params.timeMax === "string" && params.timeMax.trim()) ||
         new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -148,8 +143,7 @@ export function calendarListEventsTool(
         typeof params.maxResults === "number"
           ? Math.min(50, Math.max(1, Math.round(params.maxResults)))
           : 20;
-      const query =
-        typeof params.query === "string" ? params.query.trim() : undefined;
+      const query = typeof params.query === "string" ? params.query.trim() : undefined;
 
       try {
         const res = await withRetry(() =>
@@ -187,26 +181,20 @@ export function calendarGetEventTool(
     description: "Get a single event from a Google Calendar by its event ID.",
     parameters: Type.Object({
       ...accountParam(accountIds),
-      calendarId: Type.Optional(
-        Type.String({ description: "Calendar ID (default: primary)" }),
-      ),
+      calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
       eventId: Type.String({ description: "The event ID to retrieve" }),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
       const calendarId =
-        (typeof params.calendarId === "string" && params.calendarId.trim()) ||
-        "primary";
-      const eventId =
-        typeof params.eventId === "string" ? params.eventId.trim() : "";
+        (typeof params.calendarId === "string" && params.calendarId.trim()) || "primary";
+      const eventId = typeof params.eventId === "string" ? params.eventId.trim() : "";
       if (!eventId) {
         return errorResult(new Error("eventId required"));
       }
 
       try {
-        const res = await withRetry(() =>
-          cal.events.get({ calendarId, eventId }),
-        );
+        const res = await withRetry(() => cal.events.get({ calendarId, eventId }));
         return json(formatEvent(res.data));
       } catch (err) {
         return errorResult(err);
@@ -225,9 +213,7 @@ export function calendarCreateEventTool(
     description: "Create a new event on a Google Calendar.",
     parameters: Type.Object({
       ...accountParam(accountIds),
-      calendarId: Type.Optional(
-        Type.String({ description: "Calendar ID (default: primary)" }),
-      ),
+      calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
       summary: Type.String({ description: "Event title" }),
       start: Type.String({
         description: "Start time in ISO 8601 format",
@@ -235,33 +221,32 @@ export function calendarCreateEventTool(
       end: Type.String({
         description: "End time in ISO 8601 format",
       }),
-      description: Type.Optional(
-        Type.String({ description: "Event description" }),
-      ),
-      location: Type.Optional(
-        Type.String({ description: "Event location" }),
-      ),
+      description: Type.Optional(Type.String({ description: "Event description" })),
+      location: Type.Optional(Type.String({ description: "Event location" })),
       attendees: Type.Optional(
         Type.Array(Type.String(), {
           description: "Array of attendee email addresses",
+        }),
+      ),
+      recurrence: Type.Optional(
+        Type.Array(Type.String(), {
+          description:
+            'Recurrence rules (RFC 5545). Example: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"] or ["RRULE:FREQ=DAILY;COUNT=10"]',
         }),
       ),
       sendUpdates: Type.Optional(
         Type.Unsafe<"all" | "externalOnly" | "none">({
           type: "string",
           enum: ["all", "externalOnly", "none"],
-          description:
-            "Whether to send notifications (all, externalOnly, none)",
+          description: "Whether to send notifications (all, externalOnly, none)",
         }),
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
       const calendarId =
-        (typeof params.calendarId === "string" && params.calendarId.trim()) ||
-        "primary";
-      const summary =
-        typeof params.summary === "string" ? params.summary.trim() : "";
+        (typeof params.calendarId === "string" && params.calendarId.trim()) || "primary";
+      const summary = typeof params.summary === "string" ? params.summary.trim() : "";
       if (!summary) {
         return errorResult(new Error("summary required"));
       }
@@ -274,10 +259,11 @@ export function calendarCreateEventTool(
         return errorResult(new Error("end required"));
       }
 
+      const isAllDay = /^\d{4}-\d{2}-\d{2}$/.test(start);
       const requestBody: calendar_v3.Schema$Event = {
         summary,
-        start: { dateTime: start },
-        end: { dateTime: end },
+        start: isAllDay ? { date: start } : { dateTime: start },
+        end: isAllDay ? { date: end } : { dateTime: end },
       };
 
       if (typeof params.description === "string" && params.description.trim()) {
@@ -290,6 +276,11 @@ export function calendarCreateEventTool(
         requestBody.attendees = params.attendees
           .filter((e): e is string => typeof e === "string" && !!e.trim())
           .map((email) => ({ email: email.trim() }));
+      }
+      if (Array.isArray(params.recurrence) && params.recurrence.length > 0) {
+        requestBody.recurrence = params.recurrence.filter(
+          (r): r is string => typeof r === "string" && !!r.trim(),
+        );
       }
 
       const sendUpdates =
@@ -324,44 +315,37 @@ export function calendarUpdateEventTool(
       "Update an existing event on a Google Calendar. Only provided fields are modified.",
     parameters: Type.Object({
       ...accountParam(accountIds),
-      calendarId: Type.Optional(
-        Type.String({ description: "Calendar ID (default: primary)" }),
-      ),
+      calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
       eventId: Type.String({ description: "The event ID to update" }),
       summary: Type.Optional(Type.String({ description: "Event title" })),
-      start: Type.Optional(
-        Type.String({ description: "Start time in ISO 8601 format" }),
-      ),
-      end: Type.Optional(
-        Type.String({ description: "End time in ISO 8601 format" }),
-      ),
-      description: Type.Optional(
-        Type.String({ description: "Event description" }),
-      ),
-      location: Type.Optional(
-        Type.String({ description: "Event location" }),
-      ),
+      start: Type.Optional(Type.String({ description: "Start time in ISO 8601 format" })),
+      end: Type.Optional(Type.String({ description: "End time in ISO 8601 format" })),
+      description: Type.Optional(Type.String({ description: "Event description" })),
+      location: Type.Optional(Type.String({ description: "Event location" })),
       attendees: Type.Optional(
         Type.Array(Type.String(), {
           description: "Array of attendee email addresses",
+        }),
+      ),
+      recurrence: Type.Optional(
+        Type.Array(Type.String(), {
+          description:
+            'Recurrence rules (RFC 5545). Example: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"]. Pass empty array to remove recurrence.',
         }),
       ),
       sendUpdates: Type.Optional(
         Type.Unsafe<"all" | "externalOnly" | "none">({
           type: "string",
           enum: ["all", "externalOnly", "none"],
-          description:
-            "Whether to send notifications (all, externalOnly, none)",
+          description: "Whether to send notifications (all, externalOnly, none)",
         }),
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
       const calendarId =
-        (typeof params.calendarId === "string" && params.calendarId.trim()) ||
-        "primary";
-      const eventId =
-        typeof params.eventId === "string" ? params.eventId.trim() : "";
+        (typeof params.calendarId === "string" && params.calendarId.trim()) || "primary";
+      const eventId = typeof params.eventId === "string" ? params.eventId.trim() : "";
       if (!eventId) {
         return errorResult(new Error("eventId required"));
       }
@@ -372,10 +356,16 @@ export function calendarUpdateEventTool(
         requestBody.summary = params.summary.trim();
       }
       if (typeof params.start === "string" && params.start.trim()) {
-        requestBody.start = { dateTime: params.start.trim() };
+        const startVal = params.start.trim();
+        requestBody.start = /^\d{4}-\d{2}-\d{2}$/.test(startVal)
+          ? { date: startVal }
+          : { dateTime: startVal };
       }
       if (typeof params.end === "string" && params.end.trim()) {
-        requestBody.end = { dateTime: params.end.trim() };
+        const endVal = params.end.trim();
+        requestBody.end = /^\d{4}-\d{2}-\d{2}$/.test(endVal)
+          ? { date: endVal }
+          : { dateTime: endVal };
       }
       if (typeof params.description === "string") {
         requestBody.description = params.description.trim();
@@ -387,6 +377,11 @@ export function calendarUpdateEventTool(
         requestBody.attendees = params.attendees
           .filter((e): e is string => typeof e === "string" && !!e.trim())
           .map((email) => ({ email: email.trim() }));
+      }
+      if (Array.isArray(params.recurrence)) {
+        requestBody.recurrence = params.recurrence.filter(
+          (r): r is string => typeof r === "string" && !!r.trim(),
+        );
       }
 
       const sendUpdates =
@@ -421,26 +416,21 @@ export function calendarDeleteEventTool(
     description: "Delete an event from a Google Calendar.",
     parameters: Type.Object({
       ...accountParam(accountIds),
-      calendarId: Type.Optional(
-        Type.String({ description: "Calendar ID (default: primary)" }),
-      ),
+      calendarId: Type.Optional(Type.String({ description: "Calendar ID (default: primary)" })),
       eventId: Type.String({ description: "The event ID to delete" }),
       sendUpdates: Type.Optional(
         Type.Unsafe<"all" | "externalOnly" | "none">({
           type: "string",
           enum: ["all", "externalOnly", "none"],
-          description:
-            "Whether to send notifications (all, externalOnly, none)",
+          description: "Whether to send notifications (all, externalOnly, none)",
         }),
       ),
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
       const calendarId =
-        (typeof params.calendarId === "string" && params.calendarId.trim()) ||
-        "primary";
-      const eventId =
-        typeof params.eventId === "string" ? params.eventId.trim() : "";
+        (typeof params.calendarId === "string" && params.calendarId.trim()) || "primary";
+      const eventId = typeof params.eventId === "string" ? params.eventId.trim() : "";
       if (!eventId) {
         return errorResult(new Error("eventId required"));
       }
@@ -473,8 +463,7 @@ export function calendarFreebusyTool(
   return {
     name: "calendar_freebusy",
     label: "Check Free/Busy",
-    description:
-      "Query the free/busy status for one or more users within a time range.",
+    description: "Query the free/busy status for one or more users within a time range.",
     parameters: Type.Object({
       ...accountParam(accountIds),
       timeMin: Type.String({
@@ -489,13 +478,11 @@ export function calendarFreebusyTool(
     }),
     async execute(_id: string, params: Record<string, unknown>) {
       const cal = resolveClient(params.account as string | undefined);
-      const timeMin =
-        typeof params.timeMin === "string" ? params.timeMin.trim() : "";
+      const timeMin = typeof params.timeMin === "string" ? params.timeMin.trim() : "";
       if (!timeMin) {
         return errorResult(new Error("timeMin required"));
       }
-      const timeMax =
-        typeof params.timeMax === "string" ? params.timeMax.trim() : "";
+      const timeMax = typeof params.timeMax === "string" ? params.timeMax.trim() : "";
       if (!timeMax) {
         return errorResult(new Error("timeMax required"));
       }
@@ -504,9 +491,7 @@ export function calendarFreebusyTool(
         return errorResult(new Error("emails required"));
       }
 
-      const emails = params.emails.filter(
-        (e): e is string => typeof e === "string" && !!e.trim(),
-      );
+      const emails = params.emails.filter((e): e is string => typeof e === "string" && !!e.trim());
 
       try {
         const res = await withRetry(() =>

@@ -12,4 +12,6 @@ export type CalendarEventSummary = {
     responseStatus?: string;
   }>;
   htmlLink?: string;
+  recurrence?: string[];
+  recurringEventId?: string;
 };
