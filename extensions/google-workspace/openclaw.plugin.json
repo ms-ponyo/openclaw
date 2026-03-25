@@ -1,0 +1,48 @@
+{
+  "id": "google-workspace",
+  "name": "Google Workspace",
+  "description": "Gmail and Calendar tools via OAuth2 or service account",
+  "skills": [
+    "./skills/gmail",
+    "./skills/google-calendar"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "clientId": {
+        "type": "string",
+        "description": "OAuth2 client ID (for personal Gmail)"
+      },
+      "clientSecret": {
+        "type": "string",
+        "description": "OAuth2 client secret (for personal Gmail)"
+      },
+      "refreshToken": {
+        "type": "string",
+        "description": "OAuth2 refresh token (for personal Gmail)"
+      },
+      "serviceAccountKey": {
+        "type": "string",
+        "description": "Path to service account JSON key file, or JSON string (for Google Workspace)"
+      },
+      "delegateEmail": {
+        "type": "string",
+        "description": "Workspace email to impersonate via domain-wide delegation (for Google Workspace)"
+      },
+      "accounts": {
+        "type": "object",
+        "description": "Named accounts map for multi-account support. Each key is an account ID, value has account-specific credentials.",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "refreshToken": { "type": "string" },
+            "serviceAccountKey": { "type": "string" },
+            "delegateEmail": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}

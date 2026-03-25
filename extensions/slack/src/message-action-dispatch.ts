@@ -199,5 +199,30 @@ export async function handleSlackMessageAction(params: {
     );
   }
 
+  if (action === "sendAttachment") {
+    const to = readStringParam(actionParams, "to", { required: true });
+    const buffer = readStringParam(actionParams, "buffer", { trim: false });
+    const filename = readStringParam(actionParams, "filename");
+    const caption = readStringParam(actionParams, "caption", { allowEmpty: true });
+    const threadId2 = readStringParam(actionParams, "threadId");
+    const replyTo = readStringParam(actionParams, "replyTo");
+    if (!buffer) {
+      throw new Error("sendAttachment requires a buffer (base64 data or media path).");
+    }
+    return await invoke(
+      {
+        action: "sendAttachment",
+        to,
+        buffer,
+        filename,
+        caption,
+        threadTs: threadId2 ?? replyTo ?? undefined,
+        accountId,
+      },
+      cfg,
+      ctx.toolContext,
+    );
+  }
+
   throw new Error(`Action ${action} is not supported for provider ${providerId}.`);
 }
